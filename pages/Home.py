@@ -1,3 +1,4 @@
+# Home.py
 import streamlit as st
 import pandas as pd
 import numpy as np
@@ -6,13 +7,10 @@ import matplotlib.pyplot as plt
 import seaborn as sns
 import plotly.express as px
 
-# Page configuration
 st.set_page_config(page_title="Ingredient Waste Predictor", page_icon="🥦", layout="wide")
-
 st.title(":green[Ingredient Waste Prediction App] 🥦")
 st.markdown("Upload your restaurant ingredient & sales dataset to predict waste per ingredient.")
 
-# Load model and encoder columns
 @st.cache_resource
 def load_model():
     return joblib.load("model.pkl")
@@ -24,13 +22,11 @@ def load_encoder_columns():
 model = load_model()
 encoder_columns = load_encoder_columns()
 
-# Sidebar
 with st.sidebar:
     st.header("🔧 Settings")
     prediction_threshold = st.slider("Show predictions above (kg):", 0.0, 20.0, 2.0, step=0.5)
     st.markdown("---")
 
-# File upload
 uploaded_file = st.file_uploader("Upload your ingredient & sales data CSV", type=["csv"])
 
 if uploaded_file:
@@ -41,7 +37,6 @@ if uploaded_file:
         with st.expander("📊 View Raw Uploaded Data"):
             st.dataframe(df.head())
 
-        # Feature Engineering
         df['Date'] = pd.to_datetime(df['Date'])
         df['Year'] = df['Date'].dt.year
         df['Month'] = df['Date'].dt.month
@@ -53,6 +48,9 @@ if uploaded_file:
         for col in ['Expected_Ingredient_Usage_kg', 'Purchased_Qty_kg', 'Quantity_Used', 'Is_Weekend']:
             if col in df.columns:
                 df[col] = df[col].fillna(0)
+                q_low = df[col].quantile(0.01)
+                q_high = df[col].quantile(0.99)
+                df[col] = df[col].clip(lower=q_low, upper=q_high)
 
         categorical_cols = ['Ingredient']
         if 'Weather' in df.columns: categorical_cols.append('Weather')
@@ -65,7 +63,6 @@ if uploaded_file:
                 df_encoded[col] = 0
         df_encoded = df_encoded[encoder_columns]
 
-        # Predict
         predictions = model.predict(df_encoded)
         df['Predicted_Waste_kg'] = predictions
 
@@ -74,7 +71,6 @@ if uploaded_file:
         with tab1:
             st.subheader("📊 Prediction Table")
             st.dataframe(df[df["Predicted_Waste_kg"] > prediction_threshold][['Date', 'Ingredient', 'Predicted_Waste_kg']])
-
             csv = df.to_csv(index=False).encode()
             st.download_button("Download Full Prediction CSV", csv, file_name="predicted_waste.csv", mime="text/csv")
 
@@ -86,7 +82,7 @@ if uploaded_file:
             st.pyplot(fig)
 
             st.subheader(":chart_with_upwards_trend: Monthly Waste Trend")
-            df['MonthYear'] = df['Date'].dt.to_period("M")
+            df['MonthYear'] = df['Date'].dt.to_period("M").astype(str)
             trend = df.groupby("MonthYear")["Predicted_Waste_kg"].sum().reset_index()
             fig2 = px.line(trend, x="MonthYear", y="Predicted_Waste_kg", markers=True)
             st.plotly_chart(fig2)
@@ -101,13 +97,13 @@ if uploaded_file:
             st.subheader("Feature Importance")
             importances = model.feature_importances_
             features = encoder_columns
-            imp_df = pd.Series(importances, index=features).sort_values(ascending=False).head(15)
+            imp_df = pd.Series(importances, index=features).sort_values(ascending=False)
+            st.bar_chart(imp_df)
 
-            fig4, ax4 = plt.subplots(figsize=(8, 6))
-            sns.barplot(x=imp_df.values, y=imp_df.index, ax=ax4, palette='viridis')
-            st.pyplot(fig4)
+            low_impact = imp_df[imp_df < 0.005].index
+            st.caption(f"Ignored {len(low_impact)} low-impact features (importance < 0.005)")
 
     except Exception as e:
         st.error(f"Error reading file: {e}")
 else:
-    st.info("Please upload your final_ingredient_waste_dataset.csv file to begin.")
+    st.info("Please upload your CSV file to begin.")

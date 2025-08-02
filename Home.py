@@ -12,7 +12,7 @@ st.markdown("<h1 style='text-align: center; color: green;'>Ingredient Waste Pred
 st.markdown("### 📢 Welcome! Use the sidebar to navigate through the app sections.")
 
 # Optional Banner
-st.image("https://images.unsplash.com/photo-1569058242342-8402b041c8b1", use_column_width=True)
+st.image("https://images.unsplash.com/photo-1569058242342-8402b041c8b1", use_container_width=True)
 
 # App Description
 st.markdown("""
